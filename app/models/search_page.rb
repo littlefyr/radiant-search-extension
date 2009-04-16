@@ -81,30 +81,46 @@ class SearchPage < Page
     false
   end
   
+#  def render
+#    @query_result = []
+#    @query = ""
+#    q = @request.parameters[:q]
+#    case Page.connection.adapter_name.downcase
+#    when 'postgresql'
+#      sql_content_check = "((lower(page_parts.content) LIKE ?) OR (lower(title) LIKE ?))"
+#    when 'mysql'
+#      sql_content_check = "((LOWER(page_parts.content) LIKE ?) OR (LOWER(title) LIKE ?))"
+#    end
+#    unless (@query = q.to_s.strip).blank?
+#      tokens = query.split.collect { |c| "%#{c.downcase}%"}
+#      pages = Page.find(:all, :order => 'published_at DESC', :include => [ :parts ],
+#          :conditions => [(["#{sql_content_check}"] * tokens.size).join(" AND "), 
+#                         *tokens.collect { |token| [token] * 2 }.flatten])
+#      @query_result = pages.delete_if { |p| !p.published? }
+#    end
+#    lazy_initialize_parser_and_context
+#    if layout
+#      parse_object(layout)
+#    else
+#      render_page_part(:body)
+#    end
+#  end
   def render
-    @query_result = []
-    @query = ""
-    q = @request.parameters[:q]
-    case Page.connection.adapter_name.downcase
-    when 'postgresql'
-      sql_content_check = "((lower(page_parts.content) LIKE ?) OR (lower(title) LIKE ?))"
-    when 'mysql'
-      sql_content_check = "((LOWER(page_parts.content) LIKE ?) OR (LOWER(title) LIKE ?))"
+      @query_result = []
+      @query = ""
+      q = @request.parameters[:q]
+      unless (@query = q.to_s.strip).blank?
+        @query_result = q.split.inject(Page.published){ |scope, term| scope.has_term(term) }.uniq
+      end
+      lazy_initialize_parser_and_context
+      if layout
+        parse_object(layout)
+      else
+        render_page_part(:body)
+      end
     end
-    unless (@query = q.to_s.strip).blank?
-      tokens = query.split.collect { |c| "%#{c.downcase}%"}
-      pages = Page.find(:all, :order => 'published_at DESC', :include => [ :parts ],
-          :conditions => [(["#{sql_content_check}"] * tokens.size).join(" AND "), 
-                         *tokens.collect { |token| [token] * 2 }.flatten])
-      @query_result = pages.delete_if { |p| !p.published? }
-    end
-    lazy_initialize_parser_and_context
-    if layout
-      parse_object(layout)
-    else
-      render_page_part(:body)
-    end
-  end
+
+  
   
   def helper
     @helper ||= ActionView::Base.new
@@ -130,4 +146,23 @@ class Page
     content << "\n"
   end
 
+end
+
+Page.class_eval do
+  ##Named scopes for searching
+  named_scope :has_term,  lambda {|term| 
+    case Page.connection.adapter_name.downcase
+    when 'postgresql'
+     sql_content_check = "((lower(page_parts.content) LIKE :term) OR (lower(title) LIKE :term))"
+    when 'mysql'
+      sql_content_check = "((LOWER(page_parts.content) LIKE :term) OR (LOWER(title) LIKE :term))"
+    end
+    {
+      :joins => "INNER JOIN page_parts ON page_parts.page_id = pages.id AND page_parts.searchable = 1", 
+      :conditions => [sql_content_check, {:term => "%#{term.downcase}%"}]       
+    }
+  }
+  named_scope :published, {
+      :conditions => {:status_id => Status[:published].id} 
+  }  
 end

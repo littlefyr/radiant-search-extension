@@ -1,3 +1,4 @@
+require_dependency 'application'
 class SearchExtension < Radiant::Extension
   version "0.1"
   description %{Provides a page type that allows you to search for pages in 
@@ -6,6 +7,7 @@ class SearchExtension < Radiant::Extension
  
   def activate
     SearchPage
+    
   end
   
   def deactivate
