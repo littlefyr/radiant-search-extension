@@ -1,4 +1,5 @@
 class SearchPage < Page
+  include Radiant::Taggable
   description "Provides tags and behavior to support searching Radiant.  Based on Oliver Baltzer's search_behavior."
   attr_accessor :query_result, :query
   #### Tags ####
@@ -124,48 +125,46 @@ class SearchPage < Page
   
   def helper
     @helper ||= ActionView::Base.new
-  end
-  
-  class Page
-    #### Tags ####
-    desc %{    The namespace for all search tags.}
-    tag 'search' do |tag|
-      tag.expand
-    end
-  
-    desc %{    <r:search:form [label=""] [url="search"] [submit="Search"] />
-      Renders a search form, with the optional label, submit text and url.}
-    tag 'search:form' do |tag|
-      label = tag.attr['label'].nil? ? "" : "<label for=\"q\">#{tag.attr['label']}</label> "
-      submit = "<input value=\"#{tag.attr['submit'] || "Search"}\" type=\"submit\" />"
-      url = tag.attr['url'].nil? ? self.url.chop : tag.attr['url']
-      @query ||= ""    
-      content = %{<form action="#{url}" method="get" id="search_form"><p>#{label}<input type="text" id="q" name="q" value="#{@query}" size="15" alt=\"search\"/> #{submit}</p></form>}
-      content << "\n"
-    end
-  
-  end
-  
-  Page.class_eval do
-    ##Named scopes for searching
-    named_scope :has_term,  lambda {|term| 
-      case Page.connection.adapter_name.downcase
-      when 'postgresql'
-       sql_content_check = "((lower(page_parts.content) LIKE :term) OR (lower(title) LIKE :term))"
-      when 'mysql'
-        sql_content_check = "((LOWER(page_parts.content) LIKE :term) OR (LOWER(title) LIKE :term))"
-      end
-      {
-        :joins => "INNER JOIN page_parts ON page_parts.page_id = pages.id AND page_parts.searchable = 1", 
-        :conditions => [sql_content_check, {:term => "%#{term.downcase}%"}]       
-      }
-    }
-    named_scope :published, {
-        :conditions => {:status_id => Status[:published].id} 
-    }  
+  end  
+end
+
+class Page
+  #### Tags ####
+  desc %{    The namespace for all search tags.}
+  tag 'search' do |tag|
+    tag.expand
   end
 
-  
-  
+  desc %{    <r:search:form [label=""] [url="search"] [submit="Search"] />
+    Renders a search form, with the optional label, submit text and url.}
+  tag 'search:form' do |tag|
+    label = tag.attr['label'].nil? ? "" : "<label for=\"q\">#{tag.attr['label']}</label> "
+    submit = "<input value=\"#{tag.attr['submit'] || "Search"}\" type=\"submit\" />"
+    url = tag.attr['url'].nil? ? self.url.chop : tag.attr['url']
+    @query ||= ""    
+    content = %{<form action="#{url}" method="get" id="search_form"><p>#{label}<input type="text" id="q" name="q" value="#{@query}" size="15" alt=\"search\"/> #{submit}</p></form>}
+    content << "\n"
+  end
+
 end
+
+Page.class_eval do
+  ##Named scopes for searching
+  named_scope :has_term,  lambda {|term| 
+    case Page.connection.adapter_name.downcase
+    when 'postgresql'
+     sql_content_check = "((lower(page_parts.content) LIKE :term) OR (lower(title) LIKE :term))"
+    when 'mysql'
+      sql_content_check = "((LOWER(page_parts.content) LIKE :term) OR (LOWER(title) LIKE :term))"
+    end
+    {
+      :joins => "INNER JOIN page_parts ON page_parts.page_id = pages.id AND page_parts.searchable = 1", 
+      :conditions => [sql_content_check, {:term => "%#{term.downcase}%"}]       
+    }
+  }
+  named_scope :published, {
+      :conditions => {:status_id => Status[:published].id} 
+  }  
+end
+
 
